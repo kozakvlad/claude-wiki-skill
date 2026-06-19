@@ -21,6 +21,7 @@ PRESETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "pr
 DEFAULT_PRESET = "karpathy"
 _SAFE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 _SAFE_SEG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")  # dir/type: single safe segment
+_SAFE_FILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")  # simple name; allows the dot before ext
 _INLINE_LIST_RE = re.compile(r"^\[(.*)\]$")
 
 
@@ -41,6 +42,36 @@ def _normalize_track(raw):
     t["type"] = ty
     t["requires"] = [str(x).strip() for x in (raw.get("requires") or [])]
     t["path_map"] = [str(x).strip() for x in (raw.get("path_map") or [])]
+    layout = str(raw.get("layout") or "file").strip()
+    if layout not in ("file", "folder"):
+        raise ConfigError("track 'layout' must be file|folder: %r" % layout)
+    t["layout"] = layout
+    if layout == "folder":
+        main = str(raw.get("main") or "overview.md").strip()
+        facts = str(raw.get("facts_file") or "facts.md").strip()
+        for nm, val in (("main", main), ("facts_file", facts)):
+            if not _SAFE_FILE_RE.match(val):
+                raise ConfigError("track %r must be a simple file name: %r" % (nm, val))
+        if main == facts:
+            raise ConfigError("track 'main' must differ from 'facts_file': %r" % main)
+        req_files = [str(x).strip() for x in (raw.get("required_files") or [])]
+        req_dirs = [str(x).strip() for x in (raw.get("required_dirs") or [])]
+        for nm, seq in (("required_files", req_files), ("required_dirs", req_dirs)):
+            for v in seq:
+                if not _SAFE_FILE_RE.match(v):
+                    raise ConfigError("%s entry must be a simple name: %r" % (nm, v))
+            if len(seq) != len(set(seq)):
+                raise ConfigError("duplicate entry in %s" % nm)
+        if set(req_files) & set(req_dirs):
+            raise ConfigError("name is both required_file and required_dir")
+        if main not in req_files:        # main is always implicitly required
+            req_files = [main] + req_files
+        # facts_file is NOT auto-added: it is created by autogen/migrator and is
+        # lint-required only if the project explicitly lists it.
+        t["main"] = main
+        t["facts_file"] = facts
+        t["required_files"] = req_files
+        t["required_dirs"] = req_dirs
     return t
 
 

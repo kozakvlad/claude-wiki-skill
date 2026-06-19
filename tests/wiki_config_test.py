@@ -127,6 +127,44 @@ class TrackConfigTest(unittest.TestCase):
         self.assertIsNone(cfg["extractor"])
         self.assertIsNone(cfg["signals"])
 
+    def test_folder_layout_fields_parsed(self):
+        schema = ("---\ntype: reference\ntracks:\n"
+                  "  - dir: modules\n    type: module\n    requires: [module]\n"
+                  "    layout: folder\n    main: overview.md\n    facts_file: facts.md\n"
+                  "    required_files: [overview.md, facts.md]\n"
+                  "    required_dirs: [decisions]\n---\n")
+        t = {x["dir"]: x for x in wc.load_tracks(_wiki(self.tmp, schema))}["modules"]
+        self.assertEqual(t["layout"], "folder")
+        self.assertEqual(t["main"], "overview.md")
+        self.assertEqual(t["facts_file"], "facts.md")
+        self.assertEqual(t["required_files"], ["overview.md", "facts.md"])
+        self.assertEqual(t["required_dirs"], ["decisions"])
+
+    def test_layout_defaults_to_file(self):
+        schema = "---\ntype: reference\ntracks:\n  - dir: a\n    type: x\n---\n"
+        t = wc.load_tracks(_wiki(self.tmp, schema))[0]
+        self.assertEqual(t.get("layout", "file"), "file")
+
+    def test_bad_layout_value_is_error(self):
+        schema = ("---\ntype: reference\ntracks:\n  - dir: a\n    type: x\n"
+                  "    layout: weird\n---\n")
+        self.assertRaises(wc.ConfigError, wc.load_tracks, _wiki(self.tmp, schema))
+
+    def test_main_equals_facts_file_is_error(self):
+        schema = ("---\ntype: reference\ntracks:\n  - dir: a\n    type: x\n"
+                  "    layout: folder\n    main: same.md\n    facts_file: same.md\n---\n")
+        self.assertRaises(wc.ConfigError, wc.load_tracks, _wiki(self.tmp, schema))
+
+    def test_unsafe_required_name_is_error(self):
+        schema = ("---\ntype: reference\ntracks:\n  - dir: a\n    type: x\n"
+                  "    layout: folder\n    required_files: [\"../evil.md\"]\n---\n")
+        self.assertRaises(wc.ConfigError, wc.load_tracks, _wiki(self.tmp, schema))
+
+    def test_name_both_file_and_dir_is_error(self):
+        schema = ("---\ntype: reference\ntracks:\n  - dir: a\n    type: x\n"
+                  "    layout: folder\n    required_files: [dup]\n    required_dirs: [dup]\n---\n")
+        self.assertRaises(wc.ConfigError, wc.load_tracks, _wiki(self.tmp, schema))
+
 
 if __name__ == "__main__":
     unittest.main()
