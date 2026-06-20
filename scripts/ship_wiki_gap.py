@@ -335,20 +335,31 @@ def find_coverage(signals, wiki_dir, tracks):
         token = s["token"].lower()
         track_dir = s.get("track", "")
         track = by_dir.get(track_dir)
+        # Folder-layout tracks own a machine-generated facts file per entity. It
+        # is NOT documentation, so it must never count as coverage — a page whose
+        # basename matches track["facts_file"] is excluded from candidates. The
+        # human main file (e.g. overview.md) is what surfaces as the candidate.
+        facts_file = (track or {}).get("facts_file") if (track or {}).get("layout") == "folder" else None
+
+        def _eligible(pg):
+            return facts_file is None or os.path.basename(pg["rel"]) != facts_file
+
         if not token or track is None:
             s["pages"] = []
         elif "module" in track.get("requires", []):
             ttype = track["type"]
             s["pages"] = sorted(
                 pg["rel"] for pg in pages
-                if pg["track"] == track_dir
+                if _eligible(pg)
+                and pg["track"] == track_dir
                 and pg["type"] == ttype
                 and pg["module"] == token
                 and token in pg["body"])
         else:
             s["pages"] = sorted(
                 pg["rel"] for pg in pages
-                if pg["track"] == track_dir
+                if _eligible(pg)
+                and pg["track"] == track_dir
                 and _word_match(token, pg["body"]))
         s["bucket"] = "NEEDS-REVIEW" if s["pages"] else "GAP"
     return signals

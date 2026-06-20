@@ -150,5 +150,24 @@ if [ "$rc" != "RAISED" ]; then echo "FAIL D5 (traversal signals name not rejecte
 out="$(mktemp)"; rc="$(python3 "$GAP" --wiki "$W" --signals "$SIG" >"$out" 2>&1; echo $?)"
 if [ "$rc" != "2" ]; then echo "FAIL F (missing diff source not exit 2, got $rc):"; cat "$out"; fail=1; fi
 
+# --- Folder-layout cases: a folder-track 'modules' (main=overview.md, facts_file=facts.md).
+#     The machine facts_file must NOT count as documentation coverage; the human
+#     page (overview.md) does, and the candidate page resolves to the main file. ---
+mk_folder_wiki() {
+  w="$(mktemp -d)"
+  printf -- '---\ntype: reference\ntracks:\n  - dir: modules\n    type: module\n    requires: [module]\n    path_map: ["pkg/*"]\n    layout: folder\n    main: overview.md\n    facts_file: facts.md\n    required_files: [overview.md, facts.md]\n    required_dirs: [decisions]\n---\n' > "$w/schema.md"
+  printf '# i\n' > "$w/index.md"; printf '# l\n' > "$w/log.md"; echo "$w"
+}
+WF="$(mk_folder_wiki)"; mkdir -p "$WF/modules/foo/decisions"
+printf -- '---\ntype: module\nmodule: foo\n---\n# facts\nfoo\n' > "$WF/modules/foo/facts.md"
+DR="$(mktemp)"; printf 'diff --git a/pkg/foo/h.py b/pkg/foo/h.py\n--- a/pkg/foo/h.py\n+++ b/pkg/foo/h.py\n@@ -1 +1,2 @@\n+ RULE_TOKEN\n' > "$DR"
+out="$(mktemp)"; rc="$(python3 "$GAP" --diff-file "$DR" --wiki "$WF" --signals "$SIG" >"$out" 2>&1; echo $?)"
+if [ "$rc" != "1" ]; then echo "FAIL FG1 (folder signal not exit 1):"; cat "$out"; fail=1; fi
+grep -q "^GAP " "$out" || { echo "FAIL FG1 (facts.md wrongly counted as coverage):"; cat "$out"; fail=1; }
+printf -- '---\ntype: module\nmodule: foo\n---\n# foo\nThe foo module handles requests.\n' > "$WF/modules/foo/overview.md"
+out="$(mktemp)"; rc="$(python3 "$GAP" --diff-file "$DR" --wiki "$WF" --signals "$SIG" >"$out" 2>&1; echo $?)"
+grep -q "^NEEDS-REVIEW " "$out" || { echo "FAIL FG2 (overview not counted):"; cat "$out"; fail=1; }
+grep -q "modules/foo/overview.md" "$out" || { echo "FAIL FG2 (candidate page not main):"; cat "$out"; fail=1; }
+
 if [ "$fail" = "0" ]; then echo "ship_wiki_gap_test: PASS"; else echo "ship_wiki_gap_test: FAIL"; fi
 exit "$fail"
