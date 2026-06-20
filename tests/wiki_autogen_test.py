@@ -140,6 +140,47 @@ class AutogenGenericTest(unittest.TestCase):
         self.assertEqual(_read(os.path.join(self.wiki, "index.md")), before_idx)
 
 
+class AutogenFolderTest(unittest.TestCase):
+    def setUp(self):
+        self._td = tempfile.TemporaryDirectory(); self.root = self._td.name
+        self.src = os.path.join(self.root, "repo"); self.wiki = os.path.join(self.root, "wiki")
+        _write(os.path.join(self.wiki, "schema.md"), textwrap.dedent("""\
+            ---
+            type: reference
+            tracks:
+              - dir: modules
+                type: module
+                requires: [module]
+                path_map: ["pkg/*"]
+                layout: folder
+                main: overview.md
+                facts_file: facts.md
+                required_files: [overview.md, facts.md]
+                required_dirs: [decisions]
+            ---
+            """))
+        _write(os.path.join(self.wiki, "index.md"), "# Wiki\n")
+        self.ext = Path(os.path.join(self.root, "ext")).resolve(); os.makedirs(self.ext)
+        _write(str(self.ext / "demo.py"), _DEMO_EXTRACTOR)
+        self._orig = wa._EXTRACTORS_DIR; wa._EXTRACTORS_DIR = self.ext
+        _write(os.path.join(self.src, "pkg", "foo", "x.py"), "# x\n")
+
+    def tearDown(self):
+        wa._EXTRACTORS_DIR = self._orig; self._td.cleanup()
+
+    def test_folder_writes_facts_and_scaffolds(self):
+        rc = wa.main(["wiki_autogen.py", "--src", self.src, "--wiki", self.wiki,
+                      "--extractor", "demo", "--paths", "pkg/foo/x.py"])
+        self.assertEqual(rc, 0)
+        base = os.path.join(self.wiki, "modules", "foo")
+        self.assertIn("1.0.0", _read(os.path.join(base, "facts.md")))   # facts in facts.md
+        self.assertTrue(os.path.isfile(os.path.join(base, "overview.md")))  # main scaffolded
+        self.assertIn("module: foo", _read(os.path.join(base, "overview.md")))
+        self.assertTrue(os.path.isdir(os.path.join(base, "decisions")))     # required dir
+        self.assertNotIn("1.0.0", _read(os.path.join(base, "overview.md"))) # facts NOT in main
+        self.assertEqual(_read(os.path.join(self.wiki, "index.md")).count("modules/foo/overview.md"), 1)
+
+
 class ExtractorResolutionSafetyTest(unittest.TestCase):
     def test_unsafe_or_missing_extractor_is_noop(self):
         self.assertIsNone(wa.load_extractor("../../etc/passwd"))

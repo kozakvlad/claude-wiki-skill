@@ -187,6 +187,71 @@ def _scaffold(track, component, facts, block):
     ])
 
 
+def _identity_frontmatter(track, component):
+    """Minimal frontmatter lines for a folder-layout member/main file: the track
+    type plus every track-required field set to the component (the first
+    `requires` entry is the identity field bound to the folder name)."""
+    fm = ["---", "type: %s" % track["type"]]
+    for req in track.get("requires") or []:
+        fm.append("%s: %s" % (req, component))
+    fm.append("---")
+    return fm
+
+
+def _facts_file_text(track, component, block):
+    """Whole content of the machine-owned facts file: minimal frontmatter so it
+    passes folder-lint as a member, followed by the rendered facts block."""
+    return "\n".join(_identity_frontmatter(track, component) + ["", block, ""])
+
+
+def _scaffold_main(track, component, facts):
+    """A valid main identity page (no facts block)."""
+    desc = (str(facts.get("_description") or "").strip()
+            or ("Авто-сторінка: %s." % component))
+    title = str(facts.get("_title") or "").strip() or component
+    return "\n".join(_identity_frontmatter(track, component) + [
+        "",
+        "# %s" % title,
+        "",
+        "> TODO: %s — дописати прозою." % desc,
+        "",
+        "# Citations",
+        "",
+    ])
+
+
+def update_folder_page(wiki, track, component, facts):
+    """Folder-layout write target: facts into the entity's facts_file (whole
+    file, machine-owned), scaffold the main identity file if missing, and create
+    each required_dir with a .gitkeep."""
+    block = render_block(facts)
+    edir = wiki / track["dir"] / component
+    edir.mkdir(parents=True, exist_ok=True)
+    # 1. machine-owned facts file: replace the block in place if present, else
+    #    (re)write the whole file with minimal frontmatter + block.
+    facts_page = edir / track["facts_file"]
+    if facts_page.is_file():
+        text = facts_page.read_text(encoding="utf-8")
+        if _BLOCK_RE.search(text):
+            text = _BLOCK_RE.sub(lambda _m: block, text, count=1)
+        else:
+            text = _facts_file_text(track, component, block)
+    else:
+        text = _facts_file_text(track, component, block)
+    facts_page.write_text(text, encoding="utf-8")
+    # 2. scaffold the main identity file (no facts block) if missing.
+    main_page = edir / track["main"]
+    if not main_page.is_file():
+        main_page.write_text(_scaffold_main(track, component, facts),
+                             encoding="utf-8")
+    # 3. create each required dir with a .gitkeep if missing.
+    for rd in track.get("required_dirs") or []:
+        gk = edir / rd / ".gitkeep"
+        if not gk.exists():
+            gk.parent.mkdir(parents=True, exist_ok=True)
+            gk.write_text("", encoding="utf-8")
+
+
 def update_page(wiki, track, component, facts):
     block = render_block(facts)
     page = wiki / track["dir"] / (component + ".md")
@@ -211,17 +276,25 @@ def update_page(wiki, track, component, facts):
     page.write_text(text, encoding="utf-8")
 
 
+def _index_rel(track, component):
+    """The index pointer target for a component: the entity's main file under a
+    folder track, else the flat `<dir>/<component>.md`."""
+    if track.get("layout") == "folder":
+        return "%s/%s/%s" % (track["dir"], component, track["main"])
+    return "%s/%s.md" % (track["dir"], component)
+
+
 def update_index(wiki, track, component, facts):
     index = wiki / "index.md"
     if not index.is_file():
         return
     text = index.read_text(encoding="utf-8")
-    pointer = "](%s/%s.md)" % (track["dir"], component)
+    rel = _index_rel(track, component)
+    pointer = "](%s)" % rel
     if pointer in text:
         return
     desc = str(facts.get("_description") or "").strip() or "авто-сторінка"
-    bullet = "- [%s](%s/%s.md) — %s." % (component, track["dir"],
-                                         component, desc)
+    bullet = "- [%s](%s) — %s." % (component, rel, desc)
     text = text.rstrip() + "\n" + bullet + "\n"
     index.write_text(text, encoding="utf-8")
 
@@ -246,7 +319,10 @@ def run(src, wiki, paths, extractor_name=None):
             facts = extractor.extract_facts(str(comp_dir))
             if not isinstance(facts, dict) or not _renderable_facts(facts):
                 continue
-            update_page(wiki, track, component, facts)
+            if track.get("layout") == "folder":
+                update_folder_page(wiki, track, component, facts)
+            else:
+                update_page(wiki, track, component, facts)
             update_index(wiki, track, component, facts)
             written.append(component)
         except Exception:
