@@ -158,7 +158,7 @@ Architectural patterns inspired by [Hermes-Agent](https://github.com/NousResearc
 Остання rolling-версія (zero-config, за замовчуванням — master):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kozaksv/claude-wiki-skill/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/kozakvlad/claude-wiki-skill/master/install.sh | bash
 ```
 
 Інсталятор створює `~/.claude/skills/` як shared canonical registry навіть для Codex-only або Gemini-only користувачів. Це не вимагає встановленого Claude: Codex і Gemini отримують доступ через symlink exports.
@@ -166,7 +166,7 @@ curl -fsSL https://raw.githubusercontent.com/kozaksv/claude-wiki-skill/master/in
 Стабільний reproducible release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kozaksv/claude-wiki-skill/master/install.sh | bash -s v4.2.0
+curl -fsSL https://raw.githubusercontent.com/kozakvlad/claude-wiki-skill/master/install.sh | bash -s v4.2.0
 ```
 
 ### Доступні версії
@@ -185,7 +185,7 @@ URL у курлі завжди вказує на `master/install.sh` — це с
 `doc-extract` є optional dependency для `ingest-binary` і за замовчуванням ставиться з pinned known-good commit, щоб `bash -s v4.2.0` був відтворюваним end-to-end. Якщо треба навмисно протестувати інший extractor ref, передайте env override:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kozaksv/claude-wiki-skill/master/install.sh | WIKI_DOC_EXTRACT_REF=main bash
+curl -fsSL https://raw.githubusercontent.com/kozakvlad/claude-wiki-skill/master/install.sh | WIKI_DOC_EXTRACT_REF=main bash
 ```
 
 Для PDF/DOCX ingest є другий системний setup-крок: після install запустіть
@@ -348,13 +348,13 @@ wiki unprotect concepts/security-recovery.md
 Запустіть ту саму команду без аргумента — скіл оновиться до останнього master:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kozaksv/claude-wiki-skill/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/kozakvlad/claude-wiki-skill/master/install.sh | bash
 ```
 
 Щоб переключитись на конкретну версію (наприклад, з master на v3.0.0 або з v3.0.0 на v4.0.0) — запустіть з аргументом:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kozaksv/claude-wiki-skill/master/install.sh | bash -s v4.0.0
+curl -fsSL https://raw.githubusercontent.com/kozakvlad/claude-wiki-skill/master/install.sh | bash -s v4.0.0
 ```
 
 Скрипт переключиться на потрібний тег у вже клонованому репо. Ваші wiki у проєктах не чіпаються.
