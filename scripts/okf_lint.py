@@ -61,6 +61,7 @@ def check_bundle(root, tracks):
     track_types = {t["dir"]: t["type"] for t in tracks}
     requires_map = {t["dir"]: t["requires"] for t in tracks}
     owned_fields = {f for t in tracks for f in t["requires"]}
+    folder_tracks = {t["dir"]: t for t in tracks if t.get("layout") == "folder"}
 
     for reserved in ("index.md", "log.md"):
         if not os.path.isfile(os.path.join(root, reserved)):
@@ -93,6 +94,30 @@ def check_bundle(root, tracks):
                 if name != "schema.md":
                     violations.append(
                         "%s: root markdown not allowed outside tracks" % rel)
+            elif top in folder_tracks:
+                ftr = folder_tracks[top]
+                if len(parts) == 2 and name not in RESERVED:
+                    violations.append(
+                        "%s: must live in an entity folder under %s/" % (rel, top))
+                elif len(parts) >= 3:
+                    entity = parts[1]
+                    if name == ftr["main"] and len(parts) == 3:
+                        if fm is None or fm.get("type") != ftr["type"]:
+                            violations.append(
+                                "%s: main file type must be '%s'" % (rel, ftr["type"]))
+                        for i, req in enumerate(ftr.get("requires", [])):
+                            val = (fm or {}).get(req)
+                            if not val:
+                                violations.append(
+                                    "%s: main requires non-empty '%s:'" % (rel, req))
+                            elif i == 0 and val != entity:
+                                violations.append(
+                                    "%s: identity '%s:' (%s) must equal folder name '%s'"
+                                    % (rel, req, val, entity))
+                    else:
+                        if fm is None or not fm.get("type"):
+                            violations.append(
+                                "%s: member page needs non-empty 'type'" % rel)
             elif top in track_types:
                 expected = track_types[top]
                 if fm is not None and fm.get("type") and fm.get("type") != expected:
@@ -127,6 +152,23 @@ def check_bundle(root, tracks):
                 violations.append("%s: nav link escapes bundle: %s" % (rel, target))
             elif not os.path.exists(resolved):
                 violations.append("%s: broken internal link: %s" % (rel, target))
+
+    for top, ftr in folder_tracks.items():
+        tdir = os.path.join(root, top)
+        if not os.path.isdir(tdir):
+            continue
+        for entity in sorted(os.listdir(tdir)):
+            edir = os.path.join(tdir, entity)
+            if not os.path.isdir(edir):
+                continue
+            for rf in ftr["required_files"]:
+                if not os.path.isfile(os.path.join(edir, rf)):
+                    violations.append(
+                        "%s/%s: missing required file %s" % (top, entity, rf))
+            for rd in ftr["required_dirs"]:
+                if not os.path.isdir(os.path.join(edir, rd)):
+                    violations.append(
+                        "%s/%s: missing required dir %s/" % (top, entity, rd))
 
     return violations
 

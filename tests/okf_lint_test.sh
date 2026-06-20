@@ -86,5 +86,46 @@ printf -- '---\ntype: concept\n---\n# C\n' > "$J/concepts/x.md"
 out="$(mktemp)"; rc="$(run "$J" "$out")"
 if [ "$rc" = "0" ]; then echo "FAIL J3 (page under undeclared track accepted)"; fail=1; fi
 
+# --- Folder-layout cases (track 'modules' with layout: folder) ---
+mkfolderwiki() {
+  d="$(mktemp -d)"
+  printf -- '---\ntype: reference\ntracks:\n  - dir: modules\n    type: module\n    requires: [module]\n    layout: folder\n    main: overview.md\n    facts_file: facts.md\n    required_files: [overview.md, facts.md]\n    required_dirs: [decisions]\n---\n' > "$d/schema.md"
+  printf '# i\n' > "$d/index.md"; printf '# l\n' > "$d/log.md"; echo "$d"
+}
+mkentity() { # $1=wiki $2=name ; creates a fully valid entity folder
+  m="$1/modules/$2"; mkdir -p "$m/decisions"
+  printf -- "---\ntype: module\nmodule: $2\n---\n# $2\nprose\n" > "$m/overview.md"
+  printf -- "---\ntype: module\nmodule: $2\n---\n# facts\n" > "$m/facts.md"
+  printf '' > "$m/decisions/.gitkeep"
+}
+# K: a complete valid entity folder -> VALID.
+K="$(mkfolderwiki)"; mkentity "$K" foo
+out="$(mktemp)"; rc="$(run "$K" "$out")"
+if [ "$rc" != "0" ]; then echo "FAIL K (valid entity folder rejected):"; cat "$out"; fail=1; fi
+# L: missing required file (facts.md) -> INVALID.
+L="$(mkfolderwiki)"; mkentity "$L" bar; rm "$L/modules/bar/facts.md"
+out="$(mktemp)"; rc="$(run "$L" "$out")"
+if [ "$rc" = "0" ]; then echo "FAIL L (missing required file accepted)"; fail=1; fi
+# M: missing required dir (decisions/) -> INVALID.
+M="$(mkfolderwiki)"; mkentity "$M" baz; rm -rf "$M/modules/baz/decisions"
+out="$(mktemp)"; rc="$(run "$M" "$out")"
+if [ "$rc" = "0" ]; then echo "FAIL M (missing required dir accepted)"; fail=1; fi
+# N: loose .md directly under modules/ -> INVALID (not in an entity folder).
+N="$(mkfolderwiki)"; mkentity "$N" qux; printf -- '---\ntype: module\nmodule: loose\n---\n' > "$N/modules/loose.md"
+out="$(mktemp)"; rc="$(run "$N" "$out")"
+if [ "$rc" = "0" ]; then echo "FAIL N (loose md under folder track accepted)"; fail=1; fi
+# O: main module != folder name -> INVALID.
+O="$(mkfolderwiki)"; mkentity "$O" zap; printf -- '---\ntype: module\nmodule: WRONG\n---\n# zap\n' > "$O/modules/zap/overview.md"
+out="$(mktemp)"; rc="$(run "$O" "$out")"
+if [ "$rc" = "0" ]; then echo "FAIL O (main module != folder name accepted)"; fail=1; fi
+# P: a member sub-page with empty type -> INVALID.
+P="$(mkfolderwiki)"; mkentity "$P" pim; printf -- '---\ntitle: no type\n---\n# d\n' > "$P/modules/pim/decisions/d1.md"
+out="$(mktemp)"; rc="$(run "$P" "$out")"
+if [ "$rc" = "0" ]; then echo "FAIL P (member without type accepted)"; fail=1; fi
+# Q: an extra subfolder with a valid member -> VALID (extras allowed).
+Q="$(mkfolderwiki)"; mkentity "$Q" qen; mkdir -p "$Q/modules/qen/notes"; printf -- '---\ntype: note\n---\n# n\n' > "$Q/modules/qen/notes/n1.md"
+out="$(mktemp)"; rc="$(run "$Q" "$out")"
+if [ "$rc" != "0" ]; then echo "FAIL Q (extra subfolder member rejected):"; cat "$out"; fail=1; fi
+
 if [ "$fail" = "0" ]; then echo "okf_lint_test: PASS"; else echo "okf_lint_test: FAIL"; fi
 exit "$fail"
