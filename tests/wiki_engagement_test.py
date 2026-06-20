@@ -101,6 +101,24 @@ class WritebackMappingTest(unittest.TestCase):
             tracks)
         self.assertEqual(targets, ["components/widgets.md", "services/auth.md"])
 
+    def test_folder_layout_target_is_main(self):
+        w = Path(_wiki(os.path.join(self._td.name, "fold"), textwrap.dedent("""\
+            ---
+            type: reference
+            tracks:
+              - dir: modules
+                type: module
+                requires: [module]
+                path_map: ["pkg/*"]
+                layout: folder
+                main: overview.md
+            ---
+            """)))
+        tracks = hook._load_tracks_safe(w)
+        self.assertEqual(
+            hook._writeback_target_for("pkg/foo/x.py", tracks),
+            "modules/foo/overview.md")
+
 
 class FailOpenTest(unittest.TestCase):
     def setUp(self):

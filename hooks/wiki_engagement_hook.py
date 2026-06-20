@@ -10,8 +10,10 @@ Write-back targets are CONFIG-DRIVEN: the changed-path -> wiki-page mapping is
 derived from the project's track config ({wiki}/schema.md, via wiki_config), not
 from hardcoded paths. For each changed path the FIRST track whose `path_map`
 glob (fnmatch) matches wins; the write-back target is `<track.dir>/<name>.md`
-where `<name>` is the component directory segment captured by the glob's `*`.
-A path that matches no track has no target (skipped).
+for a flat ("file") track, or `<track.dir>/<name>/<track.main>` for a "folder"
+track (the entity's main identity file), where `<name>` is the component
+directory segment captured by the glob's `*`. A path that matches no track has
+no target (skipped).
 """
 from __future__ import annotations
 
@@ -364,8 +366,11 @@ def _component_from_glob(path: str, glob: str):
 def _writeback_target_for(path, tracks):
     """Map ONE changed file path to its wiki write-back target using the track
     config. The FIRST track whose `path_map` glob (fnmatch) matches wins; the
-    target is `<track.dir>/<name>.md` where `<name>` is the captured component
-    directory segment, resolved to a SAFE name confined to the track dir.
+    target depends on the track's layout (resolved to a SAFE component name
+    confined to the track dir):
+      - layout == "folder": `<track.dir>/<name>/<track.main>` — the entity's
+        main identity file inside its folder (main defaults to "overview.md").
+      - otherwise (flat "file" layout): `<track.dir>/<name>.md`.
     Returns the target string, or None when no track matches."""
     p = str(path or "").lstrip("/")
     if not p:
@@ -382,6 +387,9 @@ def _writeback_target_for(path, tracks):
             # segment (no .., absolute, or path separators).
             if not _SAFE_NAME_RE.match(name):
                 continue
+            if t.get("layout") == "folder":
+                main = str(t.get("main") or "overview.md").strip()
+                return "%s/%s/%s" % (d, name, main)
             return "%s/%s.md" % (d, name)
     return None
 
